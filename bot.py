@@ -1,10 +1,14 @@
 from funcs import *
 
 bot = telebot.TeleBot(token=token)
+bot.set_my_commands([
+    telebot.types.BotCommand("/start", "в самое начало"),
+    telebot.types.BotCommand("/help", "а че собственно происходит"),
+])
 db = {}
 
 
-def get_goroscope(message):
+def get_goroscope(message: telebot.types.Message):
     '''
     api call to get goroscope. send message to user
     :param message:
@@ -18,16 +22,21 @@ def get_goroscope(message):
 
     except Exception as ex:
         bot.send_message(message.chat.id, 'что-то пошло не так, сорьки')
-        print(ex)
+        with open(logfile, 'a', encoding='utf-8') as f:
+            f.write(str(datetime.datetime.today().strftime("%H:%M:%S")) + ':'
+                    + str(message.from_user.id) + ':' + str(message.from_user.first_name)
+                    + '_' + str(message.from_user.last_name) + ':' + str(message.from_user.username)
+                    + ':' + str(message.from_user.language_code)
+                    + ':' + str(ex) + '\n')
 
 
 @bot.message_handler(commands=['start'])
-def start(message):
-    '''
+def start(message: telebot.types.Message):
+    """
     function that handle comand /start
     :param message:
     :return:
-    '''
+    """
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton('аркан дня🪐')
     item2 = types.KeyboardButton('число дня🪷')
@@ -41,15 +50,24 @@ def start(message):
     bot.send_message(message.chat.id, text.format(message.from_user), reply_markup=markup)
 
 
-def process_rasclad(message):
-    '''
+@bot.message_handler(commands=['help'])
+def help(message: telebot.types.Message):
+    """
+    function that handle comand /help. send help text to user if everything goes wrong
+    :param message:
+    :return:
+    """
+    bot.send_message(message.chat.id, help_text)
+
+
+def process_rasclad(message: telebot.types.Message):
+    """
     a function for creating a tarot layout. the function uses the call to openair api. an api key is required
     :param message:
     :return:
-    '''
+    """
     question = message.text
     temp_daycard, temp_daycard2, temp_daycard3 = random.sample(range(0, 21), 3)
-    path = r'C:\Users\red1c\OneDrive\Рабочий стол\taro_bot-master\cards\card'
     with open(path + str(temp_daycard) + '.jpeg',
               'rb') as img:
         bot.send_photo(message.chat.id, img, caption=card_desc[temp_daycard])
@@ -67,51 +85,53 @@ def process_rasclad(message):
 
 
 @bot.message_handler(content_types=['text'])
-def bot_message(message):
-    '''
+def bot_message(message: telebot.types.Message):
+    """
     function that handle text messages
     :param message:
     :return:
-    '''
+    """
     try:
         if message.chat.type == 'private':
             if not message.chat.id in db:
-                db[message.chat.id] = {'temp_daynum': None,
-                                       'temp_daycard': None,
-                                       'temp_color': None}
+                db[datetime.date.today()][message.chat.id] = {'temp_daynum': None,
+                                                              'temp_daycard': None,
+                                                              'temp_color': None}
             if message.text == 'число дня🪷':
-                if not db[message.chat.id]['temp_daynum'] is None:
-                    bot.send_message(message.chat.id, 'ваше число дня: ' + str(db[message.chat.id]['temp_daynum']))
+                if not db[datetime.date.today()][message.chat.id]['temp_daynum'] is None:
+                    bot.send_message(message.chat.id, 'ваше число дня: ' + str(
+                        db[datetime.date.today()][message.chat.id]['temp_daynum']))
                     print('число дня не none')
                 else:
                     temp_daynum = random.randint(1, 77)
-                    db[message.chat.id]['temp_daynum'] = temp_daynum
+                    db[datetime.date.today()][message.chat.id]['temp_daynum'] = temp_daynum
                     bot.send_message(message.chat.id, 'ваше число дня: ' + str(temp_daynum))
             elif message.text == 'аркан дня🪐':
-                if not db[message.chat.id]['temp_daycard'] is None:
-                    temp_daycard = db[message.chat.id]['temp_daycard']
-                    text_for_openai = db[message.chat.id]["text_for_openai"]
+                if not db[datetime.date.today()][message.chat.id]['temp_daycard'] is None:
+                    temp_daycard = db[datetime.date.today()][message.chat.id]['temp_daycard']
+                    text_for_openai = db[datetime.date.today()][message.chat.id]["text_for_openai"]
                     print('аркан дня не None')
                 else:
                     temp_daycard = random.randint(0, 20)
-                    db[message.chat.id]['temp_daycard'] = temp_daycard
+                    db[datetime.date.today()][message.chat.id]['temp_daycard'] = temp_daycard
                     text_for_openai = get_tarot_reading(question='напиши описание аркана дня по карте',
-                                                cards=card_desc[temp_daycard])
-                    db[message.chat.id]["text_for_openai"] = text_for_openai
+                                                        cards=card_desc[temp_daycard])
+                    db[datetime.date.today()][message.chat.id]["text_for_openai"] = text_for_openai
                 bot.send_message(message.chat.id, 'ваш аркан дня: ' + str(temp_daycard))
-                db[message.chat.id]['temp_daycard'] = temp_daycard
+                db[datetime.date.today()][message.chat.id]['temp_daycard'] = temp_daycard
                 bot.send_message(message.chat.id, 'описание вашего аркана дня: \n')
                 img = open(
                     path + str(temp_daycard) + '.jpeg', 'rb'
                 )
-                bot.send_photo(message.chat.id, img,)
+                bot.send_photo(message.chat.id, img, )
                 bot.send_message(message.chat.id, text_for_openai)
             elif message.text[:8] == 'цвет дня':
-                if not db[message.chat.id]['temp_color'] is None:
-                    bot.send_message(message.chat.id, 'ваш цвет дня: ' + str(db[message.chat.id]['temp_color']))
+                if not db[datetime.date.today()][message.chat.id]['temp_color'] is None:
+                    bot.send_message(message.chat.id,
+                                     'ваш цвет дня: ' + str(db[datetime.date.today()][message.chat.id]['temp_color']))
                 else:
                     temp_color = random.choice(colors_array)
-                    db[message.chat.id]['temp_color'] = temp_color
+                    db[datetime.date.today()][message.chat.id]['temp_color'] = temp_color
                     bot.send_message(message.chat.id, 'ваш цвет дня: ' + str(temp_color))
             elif message.text == 'гороскоп на сегодня💫':
                 bot.send_message(message.chat.id, 'когда вы родились?\n отправляй в формате DD:MM:YYYY')
@@ -130,7 +150,13 @@ def bot_message(message):
                                  'попробуйте снова')
 
     except Exception as ex:
-        print(ex)
+        with open(logfile, 'a', encoding='utf-8') as f:
+            f.write(str(datetime.datetime.today().strftime("%H:%M:%S")) + ':'
+                    + str(message.from_user.id) + ':' + str(message.from_user.first_name)
+                    + '_' + str(message.from_user.last_name) + ':' + str(message.from_user.username)
+                    + ':' + str(message.from_user.language_code)
+                    + ':' + str(ex) + '\n')
 
 
-bot.polling(none_stop=True)
+if __name__ == '__main__':
+    bot.polling(none_stop=True)
